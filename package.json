@@ -2,7 +2,7 @@
   "name": "venice-e2ee-proxy",
   "version": "1.0.0",
   "description": "Lightweight OpenAI-compatible proxy that adds end-to-end encryption (E2EE) for Venice.ai TEE-backed models.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "bin": {
     "venice-e2ee-proxy": "dist/main.js"
   },
@@ -10,6 +10,7 @@
   "files": [
     "dist",
     "README.md",
+    "LICENSE",
     ".env.example"
   ],
   "scripts": {
