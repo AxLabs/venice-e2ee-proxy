@@ -78,6 +78,14 @@ export class EnvironmentVariables {
   @IsNotEmpty()
   BASE_URL: string = 'https://api.venice.ai';
 
+  // Max request body size accepted by the proxy. Chat payloads can be large
+  // (long histories, base64 image data URLs), so the default is well above
+  // Express's 100kb. Accepts any `bytes`-compatible string (e.g. "25mb").
+  @Transform(({ value }) => (value === undefined || value === '' ? '25mb' : String(value).trim()))
+  @IsString()
+  @IsNotEmpty()
+  MAX_BODY_SIZE: string = '25mb';
+
   @Transform(({ value }) =>
     value === undefined || value === '' ? 'info' : String(value).trim().toLowerCase(),
   )

@@ -90,6 +90,7 @@ All configuration is via environment variables (loaded from `.env` if present). 
 | `DCAP_PCCS_URL`      |          | Phala PCCS              | Optional PCCS server URL for DCAP collateral fetching.   |
 | `VERIFY_GPU_ATTESTATION` |      | `true`                  | Enforce NVIDIA GPU attestation before each E2EE session (fails closed for GPU-backed models). Enforces Venice's server-side GPU verdict — not yet an independent client-side check. See [ARCHITECTURE.md §7](./ARCHITECTURE.md#7-confidential-computing-on-the-gpu). |
 | `BASE_URL`           |          | `https://api.venice.ai` | Venice API base URL.                                     |
+| `MAX_BODY_SIZE`      |          | `25mb`                  | Max request body size (any `bytes`-compatible value, e.g. `100kb`, `10mb`). Raise for large chat histories or base64 images. |
 | `LOG_LEVEL`          |          | `info`                  | Logging verbosity: `error` \| `warn` \| `info` \| `debug` \| `verbose` (cumulative). Use `debug` for detailed per-request tracing. Secrets and prompt contents are never logged. |
 
 ---

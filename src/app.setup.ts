@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
-import type { NextFunction, Request, Response } from 'express';
+import { json, urlencoded, type NextFunction, type Request, type Response } from 'express';
+import { AppConfigService } from './config/app-config.service';
 import { OpenAIExceptionFilter } from './common/filters/openai-exception.filter';
 
 /**
@@ -9,6 +10,14 @@ import { OpenAIExceptionFilter } from './common/filters/openai-exception.filter'
  */
 export function configureApp(app: INestApplication): void {
   app.enableCors({ origin: true });
+
+  // Raise the body-size limit above Express's 100kb default. Registering our
+  // own parsers before `app.init()` means they run first and mark the body as
+  // parsed, so Nest's default 100kb parser becomes a no-op. Chat payloads can
+  // be large (long histories, base64 image data URLs).
+  const bodyLimit = app.get(AppConfigService).maxBodySize;
+  app.use(json({ limit: bodyLimit }));
+  app.use(urlencoded({ extended: true, limit: bodyLimit }));
 
   // Accept both `/v1/*` and Venice-style `/api/v1/*` base URLs. Clients often
   // mirror Venice's real API path (`https://api.venice.ai/api/v1`), so we

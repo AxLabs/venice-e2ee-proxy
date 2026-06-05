@@ -47,6 +47,10 @@ export class AppConfigService {
     return this.configService.get('BASE_URL', { infer: true });
   }
 
+  get maxBodySize(): string {
+    return this.configService.get('MAX_BODY_SIZE', { infer: true });
+  }
+
   get logLevel(): LogLevelName {
     return this.configService.get('LOG_LEVEL', { infer: true });
   }
