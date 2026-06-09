@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';

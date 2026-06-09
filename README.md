@@ -65,11 +65,43 @@ OpenAI-compatible base URL: http://0.0.0.0:3000/v1
 Swagger UI: http://0.0.0.0:3000/docs
 ```
 
-### Run without cloning (npx)
+### Run with npx (no clone, no build)
 
-Once built, the package exposes a `venice-e2ee-proxy` bin. You can run it directly from the repo:
+The proxy is published to npm as [`@axlabs/venice-e2ee-proxy`](https://www.npmjs.com/package/@axlabs/venice-e2ee-proxy) and exposes a `venice-e2ee-proxy` bin. Run the latest version without installing anything:
 
 ```bash
+VENICE_API_KEY=sk-... npx @axlabs/venice-e2ee-proxy
+```
+
+It reads the same environment variables as below. You can either pass them inline or place a `.env` file in the **current working directory** (the proxy loads `.env` from where you run it):
+
+```bash
+# Using a .env file in the current directory
+echo "VENICE_API_KEY=sk-..." > .env
+npx @axlabs/venice-e2ee-proxy
+```
+
+To pin a specific version:
+
+```bash
+VENICE_API_KEY=sk-... npx @axlabs/venice-e2ee-proxy@1.0.0
+```
+
+Or install it globally and run the `venice-e2ee-proxy` command directly:
+
+```bash
+npm install -g @axlabs/venice-e2ee-proxy
+VENICE_API_KEY=sk-... venice-e2ee-proxy
+```
+
+> **Requirements:** Node.js 20+ and `git` available on PATH. The proxy depends on the `venice-e2ee` library, which is fetched from GitHub during install, so the first `npx` run needs network access to npm **and** GitHub.
+
+### Run from a clone (npx)
+
+If you've cloned the repo, you can also run the local build directly:
+
+```bash
+npm run build
 VENICE_API_KEY=sk-... npx .
 ```
 
@@ -205,6 +237,41 @@ Tests run fully offline — the `venice-e2ee` library and the upstream HTTP clie
 - **Full TDX DCAP verification is also on by default** (PCK certificate chain, quote signature, QE identity, and TCB evaluation) via [`@phala/dcap-qvl`](https://github.com/Phala-Network/dcap-qvl). It runs as part of attestation and fetches collateral from a PCCS server (Phala's by default; override with `DCAP_PCCS_URL`). Disable it with `VERIFY_DCAP=false`. Note this requires outbound network access to the PCCS at runtime.
 - **GPU attestation enforcement is on by default** (`VERIFY_GPU_ATTESTATION`). Before each E2EE session the proxy fetches `/tee/attestation`, checks `verified` + nonce, and — for GPU-backed models — requires Venice's server-side NVIDIA verification to pass, failing closed otherwise. **Caveat:** this enforces Venice's GPU verdict; it is **not yet an independent client-side verification** of the NVIDIA quote (no audited JS verifier exists today — see [ARCHITECTURE.md §7](./ARCHITECTURE.md#7-confidential-computing-on-the-gpu)).
 - Treat your `VENICE_API_KEY` as a secret. The proxy adds the `Authorization` header upstream; clients connecting to the proxy do not need to provide a real key.
+
+---
+
+## Publishing (maintainers)
+
+The package is published to npm as **`@axlabs/venice-e2ee-proxy`** (public scoped package).
+
+What's already wired up:
+
+- `bin` → `venice-e2ee-proxy` (the published binary; `dist/main.js` carries a `#!/usr/bin/env node` shebang).
+- `files` whitelist → only `dist/`, `README.md`, `LICENSE`, and `.env.example` are published.
+- `publishConfig.access: "public"` → the scoped package is published publicly.
+- `prepublishOnly` → runs a fresh `npm run build` before publishing.
+
+To cut a release:
+
+```bash
+# 1. Make sure you're authenticated and a member of the @axlabs org
+npm login
+npm whoami
+
+# 2. Verify the contents that will be published (no source, no build cache)
+npm pack --dry-run
+
+# 3. Bump the version (creates a commit + git tag)
+npm version patch   # or: minor | major
+
+# 4. Publish (prepublishOnly rebuilds dist automatically)
+npm publish
+
+# 5. Push the version commit and tag
+git push --follow-tags
+```
+
+> Smoke-test the tarball before publishing with `npm pack` then `VENICE_API_KEY=sk-... npx ./axlabs-venice-e2ee-proxy-<version>.tgz`.
 
 ---
 

@@ -1,8 +1,33 @@
 {
-  "name": "venice-e2ee-proxy",
+  "name": "@axlabs/venice-e2ee-proxy",
   "version": "1.0.0",
   "description": "Lightweight OpenAI-compatible proxy that adds end-to-end encryption (E2EE) for Venice.ai TEE-backed models.",
   "license": "Apache-2.0",
+  "author": "AxLabs <info@axlabs.com> (https://axlabs.com)",
+  "homepage": "https://github.com/AxLabs/venice-e2ee-proxy#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AxLabs/venice-e2ee-proxy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AxLabs/venice-e2ee-proxy/issues"
+  },
+  "keywords": [
+    "venice",
+    "venice-ai",
+    "e2ee",
+    "end-to-end-encryption",
+    "tee",
+    "intel-tdx",
+    "confidential-computing",
+    "attestation",
+    "openai",
+    "openai-compatible",
+    "proxy",
+    "llm",
+    "nestjs",
+    "privacy"
+  ],
   "bin": {
     "venice-e2ee-proxy": "dist/main.js"
   },
@@ -13,6 +38,9 @@
     "LICENSE",
     ".env.example"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "prebuild": "rimraf dist",
     "build": "nest build",
@@ -24,7 +52,8 @@
     "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
