@@ -70,28 +70,45 @@ Swagger UI: http://0.0.0.0:3000/docs
 The proxy is published to npm as [`@axlabs/venice-e2ee-proxy`](https://www.npmjs.com/package/@axlabs/venice-e2ee-proxy) and exposes a `venice-e2ee-proxy` bin. Run the latest version without installing anything:
 
 ```bash
-VENICE_API_KEY=sk-... npx @axlabs/venice-e2ee-proxy
+npx @axlabs/venice-e2ee-proxy --venice-api-key sk-... --port 3000
 ```
 
-It reads the same environment variables as below. You can either pass them inline or place a `.env` file in the **current working directory** (the proxy loads `.env` from where you run it):
+Configuration can come from **CLI flags**, **environment variables**, or a **`.env` file** in the current working directory. Precedence (highest first):
+
+1. **CLI flags** (e.g. `--port 8080`)
+2. **Environment variables** (e.g. `PORT=8080`)
+3. **`.env` file**
+4. **Built-in defaults**
 
 ```bash
-# Using a .env file in the current directory
+# CLI only
+npx @axlabs/venice-e2ee-proxy --venice-api-key sk-... --log-level debug
+
+# Mix: API key from env, port from CLI
+VENICE_API_KEY=sk-... npx @axlabs/venice-e2ee-proxy --port 8080
+
+# .env in the current directory (CLI still wins when both are set)
 echo "VENICE_API_KEY=sk-..." > .env
-npx @axlabs/venice-e2ee-proxy
+npx @axlabs/venice-e2ee-proxy --port 8080
 ```
 
 To pin a specific version:
 
 ```bash
-VENICE_API_KEY=sk-... npx @axlabs/venice-e2ee-proxy@1.0.0
+npx @axlabs/venice-e2ee-proxy@1.0.0 --venice-api-key sk-...
 ```
 
-Or install it globally and run the `venice-e2ee-proxy` command directly:
+Or install globally:
 
 ```bash
 npm install -g @axlabs/venice-e2ee-proxy
-VENICE_API_KEY=sk-... venice-e2ee-proxy
+venice-e2ee-proxy --venice-api-key sk-... --port 3000
+```
+
+Show all options:
+
+```bash
+npx @axlabs/venice-e2ee-proxy --help
 ```
 
 > **Requirements:** Node.js 20+ and `git` available on PATH. The proxy depends on the `venice-e2ee` library, which is fetched from GitHub during install, so the first `npx` run needs network access to npm **and** GitHub.
@@ -109,7 +126,46 @@ VENICE_API_KEY=sk-... npx .
 
 ## Configuration
 
-All configuration is via environment variables (loaded from `.env` if present). The environment is validated at startup, so misconfiguration fails fast with a clear message.
+Configuration is validated at startup — misconfiguration fails fast with a clear message.
+
+**Precedence:** CLI flags → environment variables → `.env` file → defaults.
+
+### CLI flags
+
+All settings can be passed as CLI flags when running via `npx` or the `venice-e2ee-proxy` bin:
+
+```bash
+npx @axlabs/venice-e2ee-proxy \
+  --venice-api-key sk-... \
+  --port 8080 \
+  --log-level debug \
+  --no-verify-dcap
+```
+
+Run `npx @axlabs/venice-e2ee-proxy --help` for the full list.
+
+| CLI flag | Env variable | Default | Description |
+| -------- | ------------ | ------- | ----------- |
+| `--venice-api-key <key>` | `VENICE_API_KEY` | — | Your Venice API key (**required**). |
+| `-p`, `--port <port>` | `PORT` | `3000` | Port to listen on. |
+| `--host <host>` | `HOST` | `0.0.0.0` | Interface to bind. |
+| `--session-ttl-ms <ms>` | `SESSION_TTL_MS` | `1800000` (30 min) | E2EE session cache TTL in milliseconds. |
+| `--verify-attestation <bool>` | `VERIFY_ATTESTATION` | `true` | Verify TEE attestation on session creation. |
+| `--no-verify-attestation` | `VERIFY_ATTESTATION` | — | Shorthand to disable attestation verification. |
+| `--verify-dcap <bool>` | `VERIFY_DCAP` | `true` | Run full TDX DCAP verification via `@phala/dcap-qvl`. Only effective when `VERIFY_ATTESTATION=true`. |
+| `--no-verify-dcap` | `VERIFY_DCAP` | — | Shorthand to disable DCAP verification. |
+| `--verify-gpu-attestation <bool>` | `VERIFY_GPU_ATTESTATION` | `true` | Enforce NVIDIA GPU attestation before each E2EE session. See [ARCHITECTURE.md §7](./ARCHITECTURE.md#7-confidential-computing-on-the-gpu). |
+| `--no-verify-gpu-attestation` | `VERIFY_GPU_ATTESTATION` | — | Shorthand to disable GPU attestation enforcement. |
+| `--dcap-pccs-url <url>` | `DCAP_PCCS_URL` | Phala PCCS | Optional PCCS server URL for DCAP collateral fetching. |
+| `--base-url <url>` | `BASE_URL` | `https://api.venice.ai` | Venice API base URL. |
+| `--max-body-size <size>` | `MAX_BODY_SIZE` | `25mb` | Max request body size (any `bytes`-compatible value). |
+| `--log-level <level>` | `LOG_LEVEL` | `info` | `error` \| `warn` \| `info` \| `debug` \| `verbose`. Secrets and prompt contents are never logged. |
+
+Boolean flags accept `true`/`false`, `1`/`0`, `yes`/`no`, or `on`/`off` (same as env vars).
+
+### Environment variables
+
+The same settings can be provided via environment variables or a `.env` file in the working directory (useful for Docker, systemd, or local dev):
 
 | Variable             | Required | Default                 | Description                                              |
 | -------------------- | -------- | ----------------------- | -------------------------------------------------------- |

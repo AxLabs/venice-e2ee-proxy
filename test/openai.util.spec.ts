@@ -4,6 +4,8 @@ import {
   buildContentChunk,
   buildFinalChunk,
   buildRoleChunk,
+  countIncomingMessageChars,
+  countOutgoingE2eeMessageChars,
   flattenContent,
   generateCompletionId,
   isE2EEModel,
@@ -52,6 +54,37 @@ describe('toPlainMessages', () => {
       { role: 'system', content: 'be helpful' },
       { role: 'user', content: 'hi' },
     ]);
+  });
+});
+
+describe('message char stats', () => {
+  it('counts incoming plaintext by role', () => {
+    const stats = countIncomingMessageChars([
+      { role: 'system', content: 'abc' },
+      { role: 'user', content: 'hello' },
+      { role: 'assistant', content: 'world' },
+      { role: 'tool', content: 'x' },
+    ]);
+    expect(stats).toEqual({
+      messageCount: 4,
+      totalChars: 14,
+      encryptableChars: 8,
+      assistantChars: 5,
+      otherChars: 1,
+    });
+  });
+
+  it('counts outgoing E2EE content as encrypted vs plaintext', () => {
+    const stats = countOutgoingE2eeMessageChars([
+      { role: 'user', content: 'a'.repeat(186) },
+      { role: 'assistant', content: 'plain reply' },
+    ]);
+    expect(stats).toEqual({
+      messageCount: 2,
+      totalChars: 186 + 11,
+      encryptedChars: 186,
+      plaintextChars: 11,
+    });
   });
 });
 

@@ -4,8 +4,15 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { applyCliConfig, printCliHelp } from './config/cli-args';
 import { AppConfigService } from './config/app-config.service';
 import { configureApp } from './app.setup';
+
+const cli = applyCliConfig();
+if (cli.help) {
+  printCliHelp();
+  process.exit(0);
+}
 
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');

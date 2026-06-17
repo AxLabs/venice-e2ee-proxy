@@ -7,6 +7,8 @@ import {
   buildContentChunk,
   buildFinalChunk,
   buildRoleChunk,
+  countIncomingMessageChars,
+  countOutgoingE2eeMessageChars,
   generateCompletionId,
   isE2EEModel,
   toPlainMessages,
@@ -40,6 +42,14 @@ export class ChatService {
    */
   async *streamE2EE(dto: ChatCompletionRequestDto): AsyncGenerator<ChatCompletionChunk> {
     this.logger.debug(`E2EE stream: establishing session for "${dto.model}"`);
+
+    const received = countIncomingMessageChars(dto.messages);
+    this.logger.debug(
+      `E2EE payload received: ${received.messageCount} message(s), ${received.totalChars} char(s) ` +
+        `(user/system=${received.encryptableChars}, assistant=${received.assistantChars}` +
+        `${received.otherChars > 0 ? `, other=${received.otherChars}` : ''})`,
+    );
+
     const session = await this.e2ee.createSession(dto.model);
 
     const plainMessages = toPlainMessages(dto.messages);
@@ -47,16 +57,28 @@ export class ChatService {
       plainMessages,
       session,
     );
-    this.logger.debug(
-      `E2EE stream: encrypted ${encryptedMessages.length} message(s); ` +
-        `TEE headers=[${Object.keys(headers).join(', ')}]`,
-    );
 
+    const sent = countOutgoingE2eeMessageChars(encryptedMessages);
     const body = this.toUpstreamBody(dto, {
       messages: encryptedMessages,
       stream: true,
       venice_parameters: { ...(dto.venice_parameters ?? {}), ...veniceParameters },
     });
+    const bodyJson = JSON.stringify(body);
+    const bodyBytes = Buffer.byteLength(bodyJson, 'utf8');
+
+    this.logger.debug(
+      `E2EE payload upstream: ${sent.messageCount} message(s), ${sent.totalChars} char(s) in content ` +
+        `(encrypted hex=${sent.encryptedChars}, plaintext=${sent.plaintextChars}), ` +
+        `JSON body=${bodyBytes} byte(s)` +
+        (received.encryptableChars > 0
+          ? ` (~${Math.round(sent.encryptedChars / received.encryptableChars)}× encryptable content)`
+          : ''),
+    );
+    this.logger.debug(
+      `E2EE stream: encrypted ${encryptedMessages.length} message(s); ` +
+        `TEE headers=[${Object.keys(headers).join(', ')}]`,
+    );
 
     const response = await this.venice.postJson(CHAT_COMPLETIONS_PATH, body, headers);
     if (!response.ok) {

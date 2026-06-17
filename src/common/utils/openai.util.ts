@@ -44,6 +44,81 @@ export function toPlainMessages(
   }));
 }
 
+/** Character counts for an incoming chat payload (plaintext, before E2EE). */
+export interface IncomingMessageCharStats {
+  messageCount: number;
+  totalChars: number;
+  /** user + system content — the text that will be encrypted for E2EE. */
+  encryptableChars: number;
+  assistantChars: number;
+  otherChars: number;
+}
+
+/** Character counts for the message content fields sent upstream after E2EE. */
+export interface OutgoingE2eeMessageCharStats {
+  messageCount: number;
+  totalChars: number;
+  /** Hex ciphertext length for encrypted user/system messages. */
+  encryptedChars: number;
+  /** Plaintext length for assistant and other roles left unchanged. */
+  plaintextChars: number;
+}
+
+/** Totals plaintext character counts in a chat request received by the proxy. */
+export function countIncomingMessageChars(
+  messages: ReadonlyArray<Pick<ChatMessage, 'role' | 'content'>>,
+): IncomingMessageCharStats {
+  let totalChars = 0;
+  let encryptableChars = 0;
+  let assistantChars = 0;
+  let otherChars = 0;
+
+  for (const message of messages) {
+    const chars = flattenContent(message.content).length;
+    totalChars += chars;
+    const role = String(message.role);
+    if (role === 'user' || role === 'system') {
+      encryptableChars += chars;
+    } else if (role === 'assistant') {
+      assistantChars += chars;
+    } else {
+      otherChars += chars;
+    }
+  }
+
+  return {
+    messageCount: messages.length,
+    totalChars,
+    encryptableChars,
+    assistantChars,
+    otherChars,
+  };
+}
+
+/** Totals character counts in message `content` fields after E2EE encryption. */
+export function countOutgoingE2eeMessageChars(
+  messages: ReadonlyArray<{ role: string; content: string }>,
+): OutgoingE2eeMessageCharStats {
+  let encryptedChars = 0;
+  let plaintextChars = 0;
+
+  for (const message of messages) {
+    const chars = message.content.length;
+    if (message.role === 'user' || message.role === 'system') {
+      encryptedChars += chars;
+    } else {
+      plaintextChars += chars;
+    }
+  }
+
+  return {
+    messageCount: messages.length,
+    totalChars: encryptedChars + plaintextChars,
+    encryptedChars,
+    plaintextChars,
+  };
+}
+
 /** Builds a full non-streaming chat completion from assembled text. */
 export function buildChatCompletion(params: {
   id: string;

@@ -37,8 +37,9 @@ export class VeniceHttpService {
   ): Promise<Response> {
     const url = this.url(path);
     const payload = JSON.stringify(body);
+    const payloadBytes = Buffer.byteLength(payload, 'utf8');
     this.logger.debug(
-      `→ POST ${this.redact(url)} (body=${payload.length}B, extraHeaders=[${Object.keys(
+      `→ POST ${this.redact(url)} (body=${payloadBytes}B, extraHeaders=[${Object.keys(
         extraHeaders ?? {},
       ).join(', ')}])`,
     );
