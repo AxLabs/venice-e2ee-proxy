@@ -29,10 +29,11 @@
     "privacy"
   ],
   "bin": {
-    "venice-e2ee-proxy": "dist/main.js"
+    "venice-e2ee-proxy": "bin/venice-e2ee-proxy.js"
   },
   "main": "dist/main.js",
   "files": [
+    "bin",
     "dist",
     "README.md",
     "LICENSE",
