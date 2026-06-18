@@ -280,38 +280,24 @@ Because the proxy exposes a standard **OpenAI-compatible API**, it drops into vi
 
 ---
 
-## Publishing (maintainers)
+## Development & releases (maintainers)
 
-The package is published to npm as **`@axlabs/venice-e2ee-proxy`** (public scoped package).
-
-What's already wired up:
-
-- `bin` → `venice-e2ee-proxy` (the published binary; `dist/main.js` carries a `#!/usr/bin/env node` shebang).
-- `files` whitelist → only `dist/`, `README.md`, `LICENSE`, and `.env.example` are published.
-- `publishConfig.access: "public"` → the scoped package is published publicly.
-- `prepublishOnly` → runs a fresh `npm run build` before publishing.
-
-To cut a release:
+- **CI:** [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) builds, lints, and tests on **every commit** and pull request, on **self-hosted runners**, using the Node version from `.nvmrc`. CI does not publish.
+- **Releases:** cut **locally** with a script that bumps the version, tags, pushes, and publishes to npm (so the proxy stays runnable via `npx`).
 
 ```bash
-# 1. Make sure you're authenticated and a member of the @axlabs org
-npm login
-npm whoami
+npm login                 # one-time: must have access to the @axlabs scope
 
-# 2. Verify the contents that will be published (no source, no build cache)
-npm pack --dry-run
-
-# 3. Bump the version (creates a commit + git tag)
-npm version patch   # or: minor | major
-
-# 4. Publish (prepublishOnly rebuilds dist automatically)
-npm publish
-
-# 5. Push the version commit and tag
-git push --follow-tags
+npm run release -- patch  # 1.0.0 -> 1.0.1   (bug fixes)
+npm run release -- minor  # 1.0.0 -> 1.1.0   (new features)
+npm run release -- major  # 1.0.0 -> 2.0.0   (breaking changes)
+# or an explicit version:
+npm run release -- 1.2.3
 ```
 
-> Smoke-test the tarball before publishing with `npm pack` then `VENICE_API_KEY=sk-... npx ./axlabs-venice-e2ee-proxy-<version>.tgz`.
+The release script ([`scripts/release.sh`](./scripts/release.sh)) runs pre-flight checks (clean `main`, in sync with origin, npm auth), then `npm ci` + lint + test + build, bumps the version with an annotated `vX.Y.Z` tag, pushes the commit and tag, publishes to npm, and (if `gh` is installed) creates a GitHub Release.
+
+See **[DEVELOPMENT.md](./DEVELOPMENT.md)** for the full guide, the manual fallback, and release verification.
 
 ---
 

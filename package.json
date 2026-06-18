@@ -54,6 +54,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
+    "release": "./scripts/release.sh",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
