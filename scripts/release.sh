@@ -63,12 +63,28 @@ npm test
 npm run build
 
 # ── Bump version: creates a commit and an annotated tag vX.Y.Z ───────────
-npm version "$BUMP" -m "release: v%s"
-NEW_VERSION="$(node -p "require('./package.json').version")"
-TAG="v${NEW_VERSION}"
+# For an explicit version that equals the current one (typical first release),
+# `npm version` would error with "Version not changed". In that case we just
+# tag the already-correct version instead of bumping it.
+CURRENT_VERSION="$(node -p "require('./package.json').version")"
+if [ "$BUMP" = "$CURRENT_VERSION" ]; then
+  TAG="v${CURRENT_VERSION}"
+  if git rev-parse "$TAG" >/dev/null 2>&1; then
+    echo "package.json is already at $CURRENT_VERSION and tag $TAG already exists." >&2
+    echo "Pick a new version (e.g. 'npm run release -- patch')." >&2
+    exit 1
+  fi
+  echo "package.json is already at $CURRENT_VERSION; tagging current version without a bump."
+  git tag -a "$TAG" -m "release: ${TAG}"
+else
+  npm version "$BUMP" -m "release: v%s"
+  NEW_VERSION="$(node -p "require('./package.json').version")"
+  TAG="v${NEW_VERSION}"
+fi
 
 # ── Push commit + tag to GitHub ──────────────────────────────────────────
-git push --follow-tags origin "$RELEASE_BRANCH"
+git push origin "$RELEASE_BRANCH"
+git push origin "$TAG"
 
 # ── Publish to npm (scoped public; prepublishOnly re-runs the build) ──────
 npm publish --access public

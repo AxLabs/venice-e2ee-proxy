@@ -71,6 +71,13 @@ npm run release -- 1.2.3
 
 > You can also call the script directly: `./scripts/release.sh <bump>`.
 
+> **First release / publishing the current version.** If `package.json` is already
+> at the version you want to publish (e.g. the initial `1.0.0`), pass that exact
+> version: `npm run release -- 1.0.0`. The script detects that the manifest is
+> already at that version and **tags it without bumping** (a plain `npm version 1.0.0`
+> would otherwise fail with `Version not changed`). After the first release, use
+> `patch` / `minor` / `major` to bump normally.
+
 ### What the release script does
 
 [`scripts/release.sh`](scripts/release.sh) performs, in order:
