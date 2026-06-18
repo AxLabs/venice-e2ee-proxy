@@ -1,6 +1,6 @@
 # Venice E2EE Proxy
 
-A lightweight, **OpenAI-compatible proxy** that adds **end-to-end encryption (E2EE)** for [Venice.ai](https://venice.ai)'s TEE-backed models. Point any OpenAI-compatible tool — **Cline**, the OpenAI SDK, `curl`, … — at it and talk to Venice's confidential models without writing a single line of crypto.
+A lightweight, **OpenAI-compatible proxy** that adds **end-to-end encryption (E2EE)** for [Venice.ai](https://venice.ai)'s TEE-backed models. Point any OpenAI-compatible tool — Hermes, Jan, Cline, Continue, etc — at it and talk to Venice's confidential models without writing a single line of crypto.
 
 When you call a model whose id starts with `e2ee-`, the proxy encrypts your messages client-side; they are only decrypted inside Venice's Intel TDX **Trusted Execution Environment** — Venice never sees your plaintext. Every other model is proxied straight through, unchanged.
 
@@ -39,7 +39,7 @@ curl http://localhost:3000/v1/chat/completions \
 
 ```bash
 # Pin a specific version
-npx @axlabs/venice-e2ee-proxy@1.0.0 --venice-api-key sk-...
+npx @axlabs/venice-e2ee-proxy@1.0.1 --venice-api-key sk-...
 
 # Install globally, then run the command directly
 npm install -g @axlabs/venice-e2ee-proxy
