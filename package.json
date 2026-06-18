@@ -36,6 +36,7 @@
     "dist",
     "README.md",
     "LICENSE",
+    "NOTICE.md",
     ".env.example"
   ],
   "publishConfig": {
@@ -56,6 +57,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@axlabs/venice-e2ee": "^0.2.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
@@ -65,8 +67,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1",
-    "venice-e2ee": "git+https://github.com/elkimek/venice-e2ee.git"
+    "rxjs": "^7.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

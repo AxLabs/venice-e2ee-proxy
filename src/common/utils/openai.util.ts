@@ -25,7 +25,7 @@ export function unixSeconds(): number {
 
 /**
  * Flattens OpenAI message content (string or array-of-parts) into a single
- * string. `venice-e2ee` encrypts `{ role, content: string }` pairs, so any
+ * string. `@axlabs/venice-e2ee` encrypts `{ role, content: string }` pairs, so any
  * structured content is collapsed to its text parts.
  */
 export function flattenContent(content: ChatMessageContent): string {
@@ -34,7 +34,7 @@ export function flattenContent(content: ChatMessageContent): string {
   return content.map((part) => (typeof part?.text === 'string' ? part.text : '')).join('');
 }
 
-/** Normalizes messages into the `{ role, content }` form venice-e2ee expects. */
+/** Normalizes messages into the `{ role, content }` form @axlabs/venice-e2ee expects. */
 export function toPlainMessages(
   messages: ReadonlyArray<Pick<ChatMessage, 'role' | 'content'>>,
 ): Array<{ role: string; content: string }> {

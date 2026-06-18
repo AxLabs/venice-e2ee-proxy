@@ -20,7 +20,7 @@ const CHAT_COMPLETIONS_PATH = '/chat/completions';
 
 /**
  * Orchestrates chat completions. Requests for `e2ee-` models are encrypted via
- * `venice-e2ee`, forwarded to Venice with `stream: true`, and the response is
+ * `@axlabs/venice-e2ee`, forwarded to Venice with `stream: true`, and the response is
  * decrypted on the fly. All other models are proxied transparently.
  */
 @Injectable()

@@ -39,7 +39,7 @@ The proxy is a thin, OpenAI-compatible HTTP server that sits between an OpenAI-c
                                               └──────────────────┘                          └─────────────────────┘
 ```
 
-The proxy never persists prompts and only holds the AES key material for the lifetime of a cached session (default 30 min). All cryptography is delegated to the official [`venice-e2ee`](https://github.com/elkimek/venice-e2ee.git) library — we do not implement crypto ourselves.
+The proxy never persists prompts and only holds the AES key material for the lifetime of a cached session (default 30 min). All cryptography is delegated to the [`@axlabs/venice-e2ee`](https://github.com/AxLabs/venice-e2ee) library — we do not implement crypto ourselves.
 
 ---
 
@@ -58,7 +58,7 @@ src/
 │   ├── app-config.service.ts     #   typed accessor (no stringly-typed get('KEY') elsewhere)
 │   └── config.module.ts          #   global @nestjs/config wiring
 │
-├── e2ee/                         # The ONLY place that touches venice-e2ee
+├── e2ee/                         # The ONLY place that touches @axlabs/venice-e2ee
 │   ├── e2ee.service.ts           #   loads the ESM lib, owns the E2EE client + DCAP verifier
 │   └── e2ee.module.ts
 │
@@ -77,7 +77,7 @@ src/
     └── venice/venice-http.service.ts    # upstream HTTP client (global fetch → web streams)
 ```
 
-**Design intent:** every interaction with `venice-e2ee` is funneled through `E2eeService`. If the library changes (or we swap it), there is exactly one file to touch. Likewise, all upstream HTTP goes through `VeniceHttpService`, which deliberately uses the global `fetch` so response bodies are web `ReadableStream`s — exactly what the library's `decryptStream` consumes.
+**Design intent:** every interaction with `@axlabs/venice-e2ee` is funneled through `E2eeService`. If the library changes (or we swap it), there is exactly one file to touch. Likewise, all upstream HTTP goes through `VeniceHttpService`, which deliberately uses the global `fetch` so response bodies are web `ReadableStream`s — exactly what the library's `decryptStream` consumes.
 
 ---
 
@@ -237,7 +237,7 @@ This matters — don't overstate the guarantee. There are **two distinct levels*
 
 2. **Independent client-side GPU verification (NOT done today).**
    Re-verifying the `nvidia_payload` ourselves against **NVIDIA's** root of trust is not currently feasible because:
-   - the `venice-e2ee` library doesn't expose the raw GPU evidence on the session path (so we fetch attestation separately just for the gate);
+   - the `@axlabs/venice-e2ee` library doesn't expose the raw GPU evidence on the session path (so we fetch attestation separately just for the gate);
    - there is **no audited JS/TS NVIDIA GPU attestation verifier** — NVIDIA's tooling is the Python `nv-attestation-sdk` or the remote **NRAS** service (`nras.attestation.nvidia.com`);
    - independent freshness requires the *verifier* to control the nonce bound into the GPU evidence, which Venice's API does not currently expose for the GPU quote.
 
@@ -248,13 +248,13 @@ This matters — don't overstate the guarantee. There are **two distinct levels*
 ## 8. Key design decisions
 
 ### ESM-only dependency, CommonJS app — the `import()` shim
-`venice-e2ee` is published **ESM-only** (`"type": "module"`, no `require` export condition). The NestJS app compiles to **CommonJS**. A normal `import` would be down-leveled by TypeScript to `require()` and fail at runtime with `ERR_REQUIRE_ESM` / `ERR_PACKAGE_PATH_NOT_EXPORTED`. To bridge this we use a dynamic import that TypeScript will not rewrite:
+`@axlabs/venice-e2ee` is published **ESM-only** (`"type": "module"`, no `require` export condition). The NestJS app compiles to **CommonJS**. A normal `import` would be down-leveled by TypeScript to `require()` and fail at runtime with `ERR_REQUIRE_ESM` / `ERR_PACKAGE_PATH_NOT_EXPORTED`. To bridge this we use a dynamic import that TypeScript will not rewrite:
 
 ```ts
 const importEsm = new Function('specifier', 'return import(specifier);') as <T>(s: string) => Promise<T>;
 ```
 
-This keeps a *true* `import()` in the emitted JS, so we load the ESM module (and its `venice-e2ee/dcap` subpath) from CommonJS. We chose this over converting the whole app to ESM (more friction with the Nest toolchain) or vendoring the lib (GPL-3.0 implications + maintenance). Types are imported normally via `import type`, which is erased at compile time.
+This keeps a *true* `import()` in the emitted JS, so we load the ESM module (and its `@axlabs/venice-e2ee/dcap` subpath) from CommonJS. We chose this over converting the whole app to ESM (more friction with the Nest toolchain) or vendoring the lib (GPL-3.0 implications + maintenance). Types are imported normally via `import type`, which is erased at compile time.
 
 > Note: `@noble/secp256k1@2` is itself ESM-only; Node ≥20.19 / ≥22 supports `require()` of synchronous ESM, so this works on the project's Node baseline.
 
@@ -291,7 +291,7 @@ A global exception filter renders all errors in the OpenAI `{ error: { message, 
 
 ## 10. References
 
-- `venice-e2ee` library (protocol, attestation, crypto): <https://github.com/elkimek/venice-e2ee.git>
+- `@axlabs/venice-e2ee` library (protocol, attestation, crypto): <https://github.com/AxLabs/venice-e2ee>
 - `@phala/dcap-qvl` (Intel TDX DCAP quote verification): <https://github.com/Phala-Network/dcap-qvl>
 - Intel SGX/TDX DCAP & Provisioning Certification Service (PCS/PCCS) — Intel Trusted Services documentation.
 - NVIDIA Confidential Computing (Hopper H100 and later) — NVIDIA Confidential Computing documentation.

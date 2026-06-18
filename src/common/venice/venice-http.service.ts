@@ -7,7 +7,7 @@ const VENICE_API_PREFIX = '/api/v1';
 /**
  * Thin HTTP client for Venice's upstream API. Centralizes base URL resolution,
  * authentication headers, and error normalization. Uses the global `fetch` so
- * response bodies remain web `ReadableStream`s — exactly what `venice-e2ee`'s
+ * response bodies remain web `ReadableStream`s — exactly what `@axlabs/venice-e2ee`'s
  * `decryptStream` consumes.
  */
 @Injectable()

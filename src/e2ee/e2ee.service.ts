@@ -7,21 +7,21 @@ import type {
   AttestationResult,
   AttestationResponse,
   DcapVerifier,
-} from 'venice-e2ee';
+} from '@axlabs/venice-e2ee';
 import { AppConfigService } from '../config/app-config.service';
 import { VeniceHttpService } from '../common/venice/venice-http.service';
 
 type VeniceE2EE = ReturnType<typeof createVeniceE2EE>;
-type VeniceE2EEModule = typeof import('venice-e2ee');
+type VeniceE2EEModule = typeof import('@axlabs/venice-e2ee');
 
-/** Shape of the `venice-e2ee/dcap` subpath export (typed manually to avoid
+/** Shape of the `@axlabs/venice-e2ee/dcap` subpath export (typed manually to avoid
  * subpath module resolution requirements under classic Node resolution). */
 interface VeniceDcapModule {
   createDcapVerifier: (pccsUrl?: string) => DcapVerifier;
 }
 
 /**
- * `import()` that survives TypeScript's CommonJS down-leveling. `venice-e2ee`
+ * `import()` that survives TypeScript's CommonJS down-leveling. `@axlabs/venice-e2ee`
  * is an ESM-only package; a normal `import`/`require` would be rewritten to
  * `require()` and fail at runtime. Wrapping it in `new Function` keeps a true
  * dynamic `import()` in the emitted output.
@@ -33,7 +33,7 @@ const importEsm = new Function('specifier', 'return import(specifier);') as <T>(
 export type { E2EESession, AttestationResult };
 
 /**
- * Wrapper around the `venice-e2ee` library. Owns the single E2EE instance,
+ * Wrapper around the `@axlabs/venice-e2ee` library. Owns the single E2EE instance,
  * lazily loads the ESM module, and exposes a typed, NestJS-friendly surface
  * for session creation, encryption, and stream decryption.
  */
@@ -54,7 +54,7 @@ export class E2eeService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    const mod = await importEsm<VeniceE2EEModule>('venice-e2ee');
+    const mod = await importEsm<VeniceE2EEModule>('@axlabs/venice-e2ee');
     const dcapVerifier = await this.loadDcapVerifier();
 
     this.client = mod.createVeniceE2EE({
@@ -66,7 +66,7 @@ export class E2eeService implements OnModuleInit {
     });
 
     this.logger.log(
-      `venice-e2ee initialized (baseUrl=${this.config.baseUrl}, ` +
+      `@axlabs/venice-e2ee initialized (baseUrl=${this.config.baseUrl}, ` +
         `verifyAttestation=${this.config.verifyAttestation}, ` +
         `fullDcapVerification=${dcapVerifier ? 'on' : 'off'}, ` +
         `verifyGpuAttestation=${this.config.verifyGpuAttestation}, ` +
@@ -82,7 +82,7 @@ export class E2eeService implements OnModuleInit {
   }
 
   /**
-   * Loads the full TDX DCAP verifier from `venice-e2ee/dcap` (backed by
+   * Loads the full TDX DCAP verifier from `@axlabs/venice-e2ee/dcap` (backed by
    * `@phala/dcap-qvl`). Enabled by default; controlled via `VERIFY_DCAP`.
    * A load failure is surfaced as a clear startup error rather than silently
    * downgrading the security posture.
@@ -94,7 +94,7 @@ export class E2eeService implements OnModuleInit {
     }
 
     try {
-      const dcap = await importEsm<VeniceDcapModule>('venice-e2ee/dcap');
+      const dcap = await importEsm<VeniceDcapModule>('@axlabs/venice-e2ee/dcap');
       const verifier = dcap.createDcapVerifier(this.config.dcapPccsUrl);
       this.logger.log(
         `Full DCAP verification enabled (PCCS: ${this.config.dcapPccsUrl ?? 'Phala default'}).`,

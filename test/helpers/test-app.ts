@@ -36,13 +36,13 @@ export function readableFrom(parts: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-/** Async generator helper mirroring `venice-e2ee`'s decryptStream output. */
+/** Async generator helper mirroring `@axlabs/venice-e2ee`'s decryptStream output. */
 export async function* yieldTexts(texts: string[]): AsyncGenerator<string> {
   for (const text of texts) yield text;
 }
 
 /**
- * Boots the full Nest application with the `venice-e2ee` library and upstream
+ * Boots the full Nest application with the `@axlabs/venice-e2ee` library and upstream
  * HTTP client replaced by mocks. This lets the compliance tests exercise the
  * real controllers, pipes, filters, and routing without any network or crypto.
  */
