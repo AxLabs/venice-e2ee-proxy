@@ -1,11 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDefined, IsOptional, IsString } from 'class-validator';
-import type { ChatMessageContent } from '../../common/interfaces/openai.interface';
+import { IsArray, IsOptional, IsString } from 'class-validator';
+import type { ChatMessageContent, ToolCallDelta } from '../../common/interfaces/openai.interface';
 
 /**
  * A single chat message. Mirrors the OpenAI message object. `content` accepts
- * either a plain string or the structured array form; both are normalized to
- * text before encryption.
+ * a string, the structured array form, or null when the assistant turn is only
+ * a tool call. Tool-result bodies are encrypted; tool names, ids, and
+ * arguments are forwarded in the clear.
  */
 export class ChatMessageDto {
   @ApiProperty({
@@ -17,15 +18,34 @@ export class ChatMessageDto {
   role!: string;
 
   @ApiProperty({
-    description: 'The message content. A string, or an array of content parts.',
+    description:
+      'The message content. A string, an array of content parts, or null when an assistant message is only a tool call.',
+    nullable: true,
     oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'object' } }],
     example: 'Hello!',
   })
-  @IsDefined()
-  content!: ChatMessageContent;
+  @IsOptional()
+  content?: ChatMessageContent;
 
   @ApiPropertyOptional({ description: 'Optional name of the message author.' })
   @IsOptional()
   @IsString()
   name?: string;
+
+  @ApiPropertyOptional({
+    description: 'Id of the tool call a `tool` message answers.',
+  })
+  @IsOptional()
+  @IsString()
+  tool_call_id?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Tool calls emitted by an assistant message. Names, ids, and arguments stay plaintext.',
+    type: 'array',
+    items: { type: 'object' },
+  })
+  @IsOptional()
+  @IsArray()
+  tool_calls?: ToolCallDelta[];
 }

@@ -1,12 +1,19 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { E2eeService } from '../e2ee/e2ee.service';
 import { VeniceHttpService } from '../common/venice/venice-http.service';
-import type { ChatCompletion, ChatCompletionChunk } from '../common/interfaces/openai.interface';
+import type {
+  AssembledToolCall,
+  ChatCompletion,
+  ChatCompletionChunk,
+} from '../common/interfaces/openai.interface';
 import {
+  appendToolCallDeltas,
   buildChatCompletion,
   buildContentChunk,
   buildFinalChunk,
   buildRoleChunk,
+  buildToolCallsChunk,
+  compactToolCalls,
   countIncomingMessageChars,
   countOutgoingE2eeMessageChars,
   generateCompletionId,
@@ -37,8 +44,8 @@ export class ChatService {
   }
 
   /**
-   * E2EE streaming: synthesize OpenAI SSE chunks from decrypted text deltas.
-   * E2EE models always stream upstream (a Venice requirement).
+   * E2EE streaming: synthesize OpenAI SSE chunks from decrypted text deltas
+   * and plaintext tool-call deltas. E2EE models always stream upstream.
    */
   async *streamE2EE(dto: ChatCompletionRequestDto): AsyncGenerator<ChatCompletionChunk> {
     this.logger.debug(`E2EE stream: establishing session for "${dto.model}"`);
@@ -94,43 +101,72 @@ export class ChatService {
 
     let decryptedChunks = 0;
     let decryptedChars = 0;
+    let toolCallDeltas = 0;
+    let finishReason = 'stop';
     yield buildRoleChunk({ id, model: dto.model, created });
-    for await (const text of this.e2ee.decryptStream(response.body, session)) {
-      if (text.length > 0) {
-        decryptedChunks += 1;
-        decryptedChars += text.length;
-        yield buildContentChunk({ id, model: dto.model, content: text, created });
+    for await (const event of this.e2ee.decryptStream(response.body, session)) {
+      switch (event.kind) {
+        case 'content':
+          if (event.content.length > 0) {
+            decryptedChunks += 1;
+            decryptedChars += event.content.length;
+            yield buildContentChunk({ id, model: dto.model, content: event.content, created });
+          }
+          break;
+        case 'tool_calls':
+          toolCallDeltas += event.tool_calls.length;
+          yield buildToolCallsChunk({
+            id,
+            model: dto.model,
+            created,
+            toolCalls: event.tool_calls,
+          });
+          break;
+        case 'finish':
+          finishReason = event.finish_reason;
+          break;
+        default: {
+          const unexpected: never = event;
+          throw new Error(`Unhandled E2EE stream event: ${JSON.stringify(unexpected)}`);
+        }
       }
     }
-    yield buildFinalChunk({ id, model: dto.model, created });
+    yield buildFinalChunk({ id, model: dto.model, created, finishReason });
     this.logger.debug(
-      `E2EE stream: decrypted ${decryptedChunks} chunk(s), ${decryptedChars} char(s) (id=${id})`,
+      `E2EE stream: decrypted ${decryptedChunks} chunk(s), ${decryptedChars} char(s), ` +
+        `${toolCallDeltas} tool-call delta(s), finish_reason=${finishReason} (id=${id})`,
     );
   }
 
   /**
    * E2EE non-streaming: Venice requires streaming for E2EE, so we stream + decrypt
-   * upstream, buffer the deltas, and return a single OpenAI completion object.
+   * upstream, buffer text and tool-call deltas, and return one completion object.
    */
   async completeE2EE(dto: ChatCompletionRequestDto): Promise<ChatCompletion> {
     this.logger.debug(`E2EE non-streaming: buffering decrypted stream for "${dto.model}"`);
     let content = '';
     let id = '';
     let finishReason = 'stop';
+    const toolCalls: AssembledToolCall[] = [];
 
     for await (const chunk of this.streamE2EE(dto)) {
       id = chunk.id;
       const choice = chunk.choices[0];
       if (choice?.delta?.content) content += choice.delta.content;
+      if (choice?.delta?.tool_calls) appendToolCallDeltas(toolCalls, choice.delta.tool_calls);
       if (choice?.finish_reason) finishReason = choice.finish_reason;
     }
 
-    this.logger.debug(`E2EE non-streaming: assembled ${content.length} char(s) (id=${id})`);
+    const assembled = compactToolCalls(toolCalls);
+    this.logger.debug(
+      `E2EE non-streaming: assembled ${content.length} char(s), ${assembled.length} tool call(s) (id=${id})`,
+    );
     return buildChatCompletion({
       id: id || generateCompletionId(),
       model: dto.model,
       content,
       finishReason,
+      toolCalls: assembled,
     });
   }
 

@@ -1,7 +1,13 @@
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createTestApp, readableFrom, yieldTexts, type TestHarness } from './helpers/test-app';
+import {
+  createTestApp,
+  readableFrom,
+  yieldEvents,
+  yieldTexts,
+  type TestHarness,
+} from './helpers/test-app';
 
 /**
  * OpenAI API compliance tests. These verify the proxy speaks the shapes that
@@ -159,12 +165,211 @@ describe('OpenAI-compatible proxy', () => {
       expect(res.body).toMatchObject({
         object: 'chat.completion',
         model: 'e2ee-qwen3-5-122b-a10b',
-        choices: [{ message: { role: 'assistant', content: 'Buffered answer' } }],
+        choices: [
+          {
+            message: { role: 'assistant', content: 'Buffered answer' },
+            finish_reason: 'stop',
+          },
+        ],
       });
       // Even for a non-streaming client request, upstream is forced to stream.
       expect(harness.venice.postJson).toHaveBeenCalledWith(
         '/chat/completions',
         expect.objectContaining({ stream: true }),
+        expect.anything(),
+      );
+    });
+
+    it('streams tool-call deltas in order and finishes with tool_calls', async () => {
+      const first = {
+        index: 0,
+        id: 'call_weather',
+        type: 'function',
+        function: { name: 'get_weather', arguments: '' },
+      };
+      const second = { index: 0, function: { arguments: '{"city":"Paris"}' } };
+      harness.e2ee.decryptStream.mockReturnValue(
+        yieldEvents([
+          { kind: 'content', content: 'Checking ' },
+          { kind: 'content', content: 'weather' },
+          { kind: 'tool_calls', tool_calls: [first] },
+          { kind: 'tool_calls', tool_calls: [second] },
+          { kind: 'finish', finish_reason: 'tool_calls' },
+        ]),
+      );
+      harness.venice.postJson.mockResolvedValue({ ok: true, body: {} });
+
+      const res = await request(app.getHttpServer())
+        .post('/v1/chat/completions')
+        .send({
+          model: 'e2ee-qwen3-5-122b-a10b',
+          messages: [{ role: 'user', content: 'Weather?' }],
+          stream: true,
+        })
+        .expect(200);
+
+      const chunks = parseSse(res.text);
+      const deltas = chunks.map((chunk) => chunk.choices[0].delta);
+      expect(deltas[0]).toMatchObject({ role: 'assistant' });
+      expect(
+        deltas.filter((delta) => typeof delta.content === 'string' && delta.content.length > 0),
+      ).toEqual([{ content: 'Checking ' }, { content: 'weather' }]);
+      expect(
+        deltas.filter((delta) => Array.isArray(delta.tool_calls)).map((delta) => delta.tool_calls),
+      ).toEqual([[first], [second]]);
+      expect(chunks[chunks.length - 1].choices[0]).toMatchObject({
+        delta: {},
+        finish_reason: 'tool_calls',
+      });
+      expect(chunks.some((chunk) => chunk.choices[0].finish_reason === 'stop')).toBe(false);
+    });
+
+    it('assembles tool calls by index for clients that do not stream', async () => {
+      harness.e2ee.decryptStream.mockReturnValue(
+        yieldEvents([
+          { kind: 'content', content: 'Sure' },
+          {
+            kind: 'tool_calls',
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_a',
+                type: 'function',
+                function: { name: 'get_weather', arguments: '' },
+              },
+              {
+                index: 1,
+                id: 'call_b',
+                type: 'function',
+                function: { name: 'get_time', arguments: '' },
+              },
+            ],
+          },
+          {
+            kind: 'tool_calls',
+            tool_calls: [
+              { index: 0, function: { arguments: '{"city":' } },
+              { index: 1, function: { arguments: '{"tz":"UTC"}' } },
+            ],
+          },
+          { kind: 'tool_calls', tool_calls: [{ index: 0, function: { arguments: '"Paris"}' } }] },
+          { kind: 'finish', finish_reason: 'tool_calls' },
+        ]),
+      );
+      harness.venice.postJson.mockResolvedValue({ ok: true, body: {} });
+
+      const res = await request(app.getHttpServer())
+        .post('/v1/chat/completions')
+        .send({
+          model: 'e2ee-qwen3-5-122b-a10b',
+          messages: [{ role: 'user', content: 'Weather and time?' }],
+        })
+        .expect(200);
+
+      expect(res.body.choices[0]).toMatchObject({
+        finish_reason: 'tool_calls',
+        message: {
+          role: 'assistant',
+          content: 'Sure',
+          tool_calls: [
+            {
+              id: 'call_a',
+              type: 'function',
+              function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+            },
+            {
+              id: 'call_b',
+              type: 'function',
+              function: { name: 'get_time', arguments: '{"tz":"UTC"}' },
+            },
+          ],
+        },
+      });
+    });
+
+    it('returns null content when the assistant turn is only a tool call', async () => {
+      harness.e2ee.decryptStream.mockReturnValue(
+        yieldEvents([
+          {
+            kind: 'tool_calls',
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_only',
+                type: 'function',
+                function: { name: 'lookup', arguments: '{}' },
+              },
+            ],
+          },
+          { kind: 'finish', finish_reason: 'length' },
+        ]),
+      );
+      harness.venice.postJson.mockResolvedValue({ ok: true, body: {} });
+
+      const res = await request(app.getHttpServer())
+        .post('/v1/chat/completions')
+        .send({
+          model: 'e2ee-qwen3-5-122b-a10b',
+          messages: [{ role: 'user', content: 'Look it up' }],
+        })
+        .expect(200);
+
+      expect(res.body.choices[0].finish_reason).toBe('length');
+      expect(res.body.choices[0].message).toEqual({
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'call_only', type: 'function', function: { name: 'lookup', arguments: '{}' } },
+        ],
+      });
+    });
+
+    it('accepts a follow-up whose assistant message has null content and tool fields', async () => {
+      harness.e2ee.decryptStream.mockReturnValue(
+        yieldEvents([
+          { kind: 'content', content: 'It is sunny.' },
+          { kind: 'finish', finish_reason: 'stop' },
+        ]),
+      );
+      harness.venice.postJson.mockResolvedValue({ ok: true, body: {} });
+
+      const toolCalls = [
+        {
+          id: 'call_weather',
+          type: 'function',
+          function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+        },
+      ];
+
+      const res = await request(app.getHttpServer())
+        .post('/v1/chat/completions')
+        .send({
+          model: 'e2ee-qwen3-5-122b-a10b',
+          messages: [
+            { role: 'user', content: 'Weather in Paris?' },
+            { role: 'assistant', content: null, tool_calls: toolCalls },
+            {
+              role: 'tool',
+              tool_call_id: 'call_weather',
+              name: 'get_weather',
+              content: '22C and sunny',
+            },
+          ],
+        })
+        .expect(200);
+
+      expect(res.body.choices[0].message.content).toBe('It is sunny.');
+      expect(harness.e2ee.encrypt).toHaveBeenCalledWith(
+        [
+          { role: 'user', content: 'Weather in Paris?' },
+          { role: 'assistant', content: null, tool_calls: toolCalls },
+          {
+            role: 'tool',
+            content: '22C and sunny',
+            name: 'get_weather',
+            tool_call_id: 'call_weather',
+          },
+        ],
         expect.anything(),
       );
     });
@@ -194,3 +399,17 @@ describe('OpenAI-compatible proxy', () => {
     });
   });
 });
+
+function parseSse(body: string): Array<{
+  choices: Array<{ delta: Record<string, unknown>; finish_reason: string | null }>;
+}> {
+  return body
+    .split('\n\n')
+    .filter((block) => block.startsWith('data: ') && !block.includes('[DONE]'))
+    .map(
+      (block) =>
+        JSON.parse(block.slice('data: '.length)) as {
+          choices: Array<{ delta: Record<string, unknown>; finish_reason: string | null }>;
+        },
+    );
+}

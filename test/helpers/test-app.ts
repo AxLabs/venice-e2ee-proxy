@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import type { DecryptedStreamEvent } from '@axlabs/venice-e2ee';
 import { Test } from '@nestjs/testing';
 import { vi } from 'vitest';
 import { AppModule } from '../../src/app.module';
@@ -36,9 +37,16 @@ export function readableFrom(parts: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-/** Async generator helper mirroring `@axlabs/venice-e2ee`'s decryptStream output. */
-export async function* yieldTexts(texts: string[]): AsyncGenerator<string> {
-  for (const text of texts) yield text;
+/** Async generator of decrypted stream events, matching `@axlabs/venice-e2ee`. */
+export async function* yieldEvents(
+  events: DecryptedStreamEvent[],
+): AsyncGenerator<DecryptedStreamEvent> {
+  for (const event of events) yield event;
+}
+
+/** Content-only stream events, for tests that do not exercise tool calls. */
+export async function* yieldTexts(texts: string[]): AsyncGenerator<DecryptedStreamEvent> {
+  for (const text of texts) yield { kind: 'content', content: text };
 }
 
 /**
@@ -59,8 +67,14 @@ export async function createTestApp(): Promise<TestHarness> {
 
   const e2ee: MockedE2ee = {
     createSession: vi.fn(async (modelId: string) => ({ modelId })),
-    encrypt: vi.fn(async (messages: Array<{ role: string; content: string }>) => ({
-      encryptedMessages: messages.map((m) => ({ role: m.role, content: `ENC(${m.content})` })),
+    encrypt: vi.fn(async (messages: Array<{ role: string; content?: string | null }>) => ({
+      encryptedMessages: messages.map((message) => ({
+        ...message,
+        content:
+          typeof message.content === 'string' && message.content.length > 0
+            ? `ENC(${message.content})`
+            : (message.content ?? null),
+      })),
       headers: { 'X-Venice-TEE-Client-Pub-Key': 'client-pub' },
       veniceParameters: { enable_e2ee: true },
     })),

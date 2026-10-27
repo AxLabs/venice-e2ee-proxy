@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import type {
+  AssembledToolCall,
   ChatCompletion,
   ChatCompletionChunk,
   ChatMessage,
   ChatMessageContent,
+  ToolCallDelta,
 } from '../interfaces/openai.interface';
 
 const E2EE_PREFIX = 'e2ee-';
@@ -25,23 +27,53 @@ export function unixSeconds(): number {
 
 /**
  * Flattens OpenAI message content (string or array-of-parts) into a single
- * string. `@axlabs/venice-e2ee` encrypts `{ role, content: string }` pairs, so any
- * structured content is collapsed to its text parts.
+ * string. `null` and missing content stay empty here; callers that encrypt
+ * decide whether that becomes `null` or ciphertext.
  */
-export function flattenContent(content: ChatMessageContent): string {
+export function flattenContent(content: ChatMessageContent | undefined): string {
   if (content === null || content === undefined) return '';
   if (typeof content === 'string') return content;
   return content.map((part) => (typeof part?.text === 'string' ? part.text : '')).join('');
 }
 
-/** Normalizes messages into the `{ role, content }` form @axlabs/venice-e2ee expects. */
-export function toPlainMessages(
-  messages: ReadonlyArray<Pick<ChatMessage, 'role' | 'content'>>,
-): Array<{ role: string; content: string }> {
-  return messages.map((message) => ({
-    role: String(message.role),
-    content: flattenContent(message.content),
-  }));
+/** Message passed to `@axlabs/venice-e2ee` `encrypt`, including tool-call structure. */
+export interface PlainMessage {
+  role: string;
+  content: string | null;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: ToolCallDelta[];
+}
+
+/** Fields read from a chat message before encryption. */
+interface PlainMessageSource {
+  role: string;
+  content?: ChatMessageContent;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: ToolCallDelta[];
+}
+
+/**
+ * Normalizes messages for encryption. Tool-call metadata is preserved in the
+ * clear. `content: null` stays `null` so a tool-only assistant turn is not
+ * flattened into an empty string (which the library would otherwise have to
+ * treat as text).
+ */
+export function toPlainMessages(messages: ReadonlyArray<PlainMessageSource>): PlainMessage[] {
+  return messages.map((message) => {
+    const plain: PlainMessage = {
+      role: String(message.role),
+      content:
+        message.content === null || message.content === undefined
+          ? null
+          : flattenContent(message.content),
+    };
+    if (typeof message.name === 'string') plain.name = message.name;
+    if (typeof message.tool_call_id === 'string') plain.tool_call_id = message.tool_call_id;
+    if (Array.isArray(message.tool_calls)) plain.tool_calls = message.tool_calls;
+    return plain;
+  });
 }
 
 /** Character counts for an incoming chat payload (plaintext, before E2EE). */
@@ -58,9 +90,9 @@ export interface IncomingMessageCharStats {
 export interface OutgoingE2eeMessageCharStats {
   messageCount: number;
   totalChars: number;
-  /** Hex ciphertext length for encrypted user/system messages. */
+  /** Hex ciphertext length for user/system `content`. */
   encryptedChars: number;
-  /** Plaintext length for assistant and other roles left unchanged. */
+  /** `content` length for every other role (ciphertext for non-empty tool results). */
   plaintextChars: number;
 }
 
@@ -97,13 +129,13 @@ export function countIncomingMessageChars(
 
 /** Totals character counts in message `content` fields after E2EE encryption. */
 export function countOutgoingE2eeMessageChars(
-  messages: ReadonlyArray<{ role: string; content: string }>,
+  messages: ReadonlyArray<{ role: string; content: string | null }>,
 ): OutgoingE2eeMessageCharStats {
   let encryptedChars = 0;
   let plaintextChars = 0;
 
   for (const message of messages) {
-    const chars = message.content.length;
+    const chars = message.content?.length ?? 0;
     if (message.role === 'user' || message.role === 'system') {
       encryptedChars += chars;
     } else {
@@ -119,13 +151,51 @@ export function countOutgoingE2eeMessageChars(
   };
 }
 
-/** Builds a full non-streaming chat completion from assembled text. */
+/**
+ * Merges streaming `delta.tool_calls` into completed calls, keyed by `index`.
+ * `function.name` and `function.arguments` are concatenated in arrival order.
+ */
+export function appendToolCallDeltas(
+  accumulated: AssembledToolCall[],
+  deltas: readonly ToolCallDelta[],
+): void {
+  for (const delta of deltas) {
+    const index = typeof delta.index === 'number' ? delta.index : 0;
+    const current = accumulated[index] ?? {
+      id: '',
+      type: 'function',
+      function: { name: '', arguments: '' },
+    };
+    if (typeof delta.id === 'string' && delta.id.length > 0) current.id = delta.id;
+    if (typeof delta.type === 'string' && delta.type.length > 0) current.type = delta.type;
+    if (typeof delta.function?.name === 'string') current.function.name += delta.function.name;
+    if (typeof delta.function?.arguments === 'string') {
+      current.function.arguments += delta.function.arguments;
+    }
+    accumulated[index] = current;
+  }
+}
+
+/** Drops holes left by a sparse tool-call index. */
+export function compactToolCalls(accumulated: AssembledToolCall[]): AssembledToolCall[] {
+  return accumulated.filter((call) => call != null);
+}
+
+/** Builds a full non-streaming chat completion from assembled text and tool calls. */
 export function buildChatCompletion(params: {
   id: string;
   model: string;
   content: string;
   finishReason?: string;
+  toolCalls?: AssembledToolCall[];
 }): ChatCompletion {
+  const toolCalls = params.toolCalls ?? [];
+  const message: ChatCompletion['choices'][number]['message'] = {
+    role: 'assistant',
+    content: toolCalls.length > 0 && params.content.length === 0 ? null : params.content,
+  };
+  if (toolCalls.length > 0) message.tool_calls = toolCalls;
+
   return {
     id: params.id,
     object: 'chat.completion',
@@ -134,7 +204,7 @@ export function buildChatCompletion(params: {
     choices: [
       {
         index: 0,
-        message: { role: 'assistant', content: params.content },
+        message,
         finish_reason: params.finishReason ?? 'stop',
         logprobs: null,
       },
@@ -180,6 +250,29 @@ export function buildRoleChunk(params: {
       {
         index: 0,
         delta: { role: 'assistant', content: '' },
+        finish_reason: null,
+        logprobs: null,
+      },
+    ],
+  };
+}
+
+/** Builds a streaming chunk carrying `delta.tool_calls`, in the order received. */
+export function buildToolCallsChunk(params: {
+  id: string;
+  model: string;
+  created: number;
+  toolCalls: ToolCallDelta[];
+}): ChatCompletionChunk {
+  return {
+    id: params.id,
+    object: 'chat.completion.chunk',
+    created: params.created,
+    model: params.model,
+    choices: [
+      {
+        index: 0,
+        delta: { tool_calls: params.toolCalls },
         finish_reason: null,
         logprobs: null,
       },

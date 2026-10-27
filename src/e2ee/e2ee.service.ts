@@ -3,7 +3,9 @@ import { Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@
 import type {
   createVeniceE2EE,
   E2EESession,
+  E2EEMessage,
   EncryptedPayload,
+  DecryptedStreamEvent,
   AttestationResult,
   AttestationResponse,
   DcapVerifier,
@@ -30,7 +32,7 @@ const importEsm = new Function('specifier', 'return import(specifier);') as <T>(
   specifier: string,
 ) => Promise<T>;
 
-export type { E2EESession, AttestationResult };
+export type { E2EESession, DecryptedStreamEvent, AttestationResult };
 
 /**
  * Wrapper around the `@axlabs/venice-e2ee` library. Owns the single E2EE instance,
@@ -237,17 +239,20 @@ export class E2eeService implements OnModuleInit {
     this.gpuAttestationCache.set(modelId, now + this.config.sessionTtlMs);
   }
 
-  /** Encrypts messages for an established session. */
-  async encrypt(
-    messages: Array<{ role: string; content: string }>,
-    session: E2EESession,
-  ): Promise<EncryptedPayload> {
+  /** Encrypts messages for an established session. Tool metadata is left in the clear. */
+  async encrypt(messages: E2EEMessage[], session: E2EESession): Promise<EncryptedPayload> {
     this.logger.debug(`Encrypting ${messages.length} message(s) for "${session.modelId}"`);
     return this.instance.encrypt(messages, session);
   }
 
-  /** Decrypts a Venice SSE stream, yielding plaintext text deltas. */
-  decryptStream(body: ReadableStream<Uint8Array>, session: E2EESession): AsyncGenerator<string> {
+  /**
+   * Decrypts a Venice SSE stream into content, tool-call, and finish events.
+   * Tool-call deltas are not ciphertext.
+   */
+  decryptStream(
+    body: ReadableStream<Uint8Array>,
+    session: E2EESession,
+  ): AsyncGenerator<DecryptedStreamEvent> {
     return this.instance.decryptStream(body, session);
   }
 
