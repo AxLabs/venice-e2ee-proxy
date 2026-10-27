@@ -1,11 +1,22 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class ChatCompletionMessageDto {
   @ApiProperty({ example: 'assistant' })
   role!: string;
 
-  @ApiProperty({ example: 'Hello! How can I help you today?' })
-  content!: string;
+  @ApiProperty({
+    example: 'Hello! How can I help you today?',
+    nullable: true,
+    description: 'Null when the assistant message is only a tool call.',
+  })
+  content!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Tool calls assembled from the stream, when the model asked to call tools.',
+    type: 'array',
+    items: { type: 'object' },
+  })
+  tool_calls?: unknown[];
 }
 
 class ChatCompletionChoiceDto {

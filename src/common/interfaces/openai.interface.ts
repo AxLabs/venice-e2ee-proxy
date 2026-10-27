@@ -13,13 +13,39 @@ export interface ChatContentPart {
   [key: string]: unknown;
 }
 
-/** OpenAI message content can be a plain string or an array of typed parts. */
+/** OpenAI message content can be a plain string, an array of typed parts, or null. */
 export type ChatMessageContent = string | ChatContentPart[] | null;
+
+/**
+ * A streaming tool-call delta, or the call object stored on an assistant message.
+ * Names, ids, and arguments stay plaintext; Venice's enclave reads them as JSON.
+ */
+export interface ToolCallDelta {
+  index?: number;
+  id?: string;
+  type?: string;
+  function?: {
+    name?: string;
+    arguments?: string;
+  };
+}
+
+/** Tool call assembled from streaming deltas for a non-streaming completion. */
+export interface AssembledToolCall {
+  id: string;
+  type: string;
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
 
 export interface ChatMessage {
   role: ChatRole;
-  content: ChatMessageContent;
+  content?: ChatMessageContent;
   name?: string;
+  tool_call_id?: string;
+  tool_calls?: ToolCallDelta[];
   [key: string]: unknown;
 }
 
@@ -27,7 +53,8 @@ export interface ChatCompletionChoice {
   index: number;
   message: {
     role: 'assistant';
-    content: string;
+    content: string | null;
+    tool_calls?: AssembledToolCall[];
   };
   finish_reason: string | null;
   logprobs: null;
@@ -55,6 +82,7 @@ export interface ChatCompletionChunkChoice {
   delta: {
     role?: 'assistant';
     content?: string;
+    tool_calls?: ToolCallDelta[];
   };
   finish_reason: string | null;
   logprobs: null;

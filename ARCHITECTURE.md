@@ -90,12 +90,12 @@ The proxy forwards the request to Venice unchanged. Non-streaming returns the JS
 
 ### E2EE, streaming (`stream: true`)
 1. `E2eeService.createSession(model)` — fetches the TEE attestation, **verifies it**, and performs ECDH key exchange (cached for `SESSION_TTL_MS`).
-2. `E2eeService.encrypt(messages, session)` — AES-256-GCM encrypts each message; returns `encryptedMessages`, TEE headers, and `venice_parameters: { enable_e2ee: true }`.
-3. The proxy POSTs to Venice with `stream: true`.
-4. `E2eeService.decryptStream(body, session)` decrypts each SSE chunk; the controller re-wraps the plaintext deltas as standard OpenAI `chat.completion.chunk` events, terminated by `data: [DONE]`.
+2. `E2eeService.encrypt(messages, session)` — AES-256-GCM encrypts prompt and tool-result `content`. `tool_calls`, `tool_call_id`, and `name` stay JSON. `content: null` on a tool-only assistant turn stays `null`. Returns `encryptedMessages`, TEE headers, and `venice_parameters: { enable_e2ee: true }`.
+3. The proxy POSTs to Venice with `stream: true`. `tools` and `tool_choice` are forwarded as-is.
+4. `E2eeService.decryptStream(body, session)` yields decrypted text, unchanged `tool_calls` deltas, and the real `finish_reason`. The controller re-wraps those as OpenAI `chat.completion.chunk` events, terminated by `data: [DONE]`.
 
 ### E2EE, non-streaming (`stream: false` or omitted)
-Venice **requires** streaming for E2EE. So the proxy still streams upstream and decrypts, but **buffers** the deltas and returns a single OpenAI `chat.completion` object. This is why non-streaming E2EE requests still work for clients that don't speak SSE — the streaming requirement is an upstream constraint we hide.
+Venice **requires** streaming for E2EE. So the proxy still streams upstream and decrypts, but **buffers** text and tool-call deltas (assembled by `index`) and returns a single OpenAI `chat.completion` object. A tool-only turn has `content: null` and `finish_reason: "tool_calls"`. This is why non-streaming E2EE requests still work for clients that don't speak SSE — the streaming requirement is an upstream constraint we hide.
 
 ---
 
@@ -129,10 +129,11 @@ Proxy (client side)                                   Venice CPU TEE (Intel TDX)
 
 Two subtleties worth recording:
 
-- **Per-chunk ephemeral keys.** Every response chunk carries a *fresh* server ephemeral public key, so each chunk requires its own ECDH derivation. The library handles this in `decryptStream`; we just consume plaintext deltas.
+- **Per-chunk ephemeral keys.** Every encrypted response chunk carries a *fresh* server ephemeral public key, so each chunk requires its own ECDH derivation. The library handles this in `decryptStream`; we consume decrypted text plus plaintext tool-call deltas.
 - **Plaintext passthrough.** Some tokens (e.g. whitespace) may arrive unencrypted; the library handles that and the `[DONE]` sentinel internally.
+- **Tool metadata is plaintext on the wire.** Tool names, JSON schemas, call ids, and arguments are not part of the encrypted `content` channel — the enclave chat template reads them as JSON. Prompts and tool-result bodies are ciphertext.
 
-Plaintext exists in only two places: **on this proxy** (briefly, in memory) and **inside the TEE**. It never traverses the network in the clear.
+Prompt and tool-result plaintext exists in only two places: **on this proxy** (briefly, in memory) and **inside the TEE**. That text never traverses the network in the clear. Tool-call metadata does.
 
 ---
 

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendToolCallDeltas,
   buildChatCompletion,
   buildContentChunk,
   buildFinalChunk,
   buildRoleChunk,
+  buildToolCallsChunk,
+  compactToolCalls,
   countIncomingMessageChars,
   countOutgoingE2eeMessageChars,
   flattenContent,
@@ -13,6 +16,7 @@ import {
   toPlainMessages,
   SSE_DONE,
 } from '../src/common/utils/openai.util';
+import type { AssembledToolCall } from '../src/common/interfaces/openai.interface';
 
 describe('isE2EEModel', () => {
   it('detects e2ee- prefixed models', () => {
@@ -55,6 +59,34 @@ describe('toPlainMessages', () => {
       { role: 'user', content: 'hi' },
     ]);
   });
+
+  it('keeps null content and tool fields for a follow-up turn', () => {
+    const toolCalls = [
+      {
+        id: 'call_weather',
+        type: 'function',
+        function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+      },
+    ];
+    const result = toPlainMessages([
+      { role: 'assistant', content: null, tool_calls: toolCalls },
+      {
+        role: 'tool',
+        content: '22C and sunny',
+        tool_call_id: 'call_weather',
+        name: 'get_weather',
+      },
+    ]);
+    expect(result).toEqual([
+      { role: 'assistant', content: null, tool_calls: toolCalls },
+      {
+        role: 'tool',
+        content: '22C and sunny',
+        tool_call_id: 'call_weather',
+        name: 'get_weather',
+      },
+    ]);
+  });
 });
 
 describe('message char stats', () => {
@@ -77,13 +109,14 @@ describe('message char stats', () => {
   it('counts outgoing E2EE content as encrypted vs plaintext', () => {
     const stats = countOutgoingE2eeMessageChars([
       { role: 'user', content: 'a'.repeat(186) },
-      { role: 'assistant', content: 'plain reply' },
+      { role: 'assistant', content: null },
+      { role: 'tool', content: 'cipher' },
     ]);
     expect(stats).toEqual({
-      messageCount: 2,
-      totalChars: 186 + 11,
+      messageCount: 3,
+      totalChars: 186 + 6,
       encryptedChars: 186,
-      plaintextChars: 11,
+      plaintextChars: 6,
     });
   });
 });
@@ -110,8 +143,50 @@ describe('OpenAI builders', () => {
     expect(content.choices[0].delta.content).toBe('tok');
     expect(content.choices[0].finish_reason).toBeNull();
 
-    const final = buildFinalChunk({ id: 'c1', model: 'm', created });
-    expect(final.choices[0].finish_reason).toBe('stop');
+    const final = buildFinalChunk({ id: 'c1', model: 'm', created, finishReason: 'tool_calls' });
+    expect(final.choices[0].finish_reason).toBe('tool_calls');
+    expect(final.choices[0].delta).toEqual({});
+
+    const call = {
+      index: 0,
+      id: 'call_1',
+      type: 'function',
+      function: { name: 'lookup', arguments: '{}' },
+    };
+    const toolChunk = buildToolCallsChunk({ id: 'c1', model: 'm', created, toolCalls: [call] });
+    expect(toolChunk.choices[0].delta.tool_calls).toEqual([call]);
+    expect(toolChunk.choices[0].finish_reason).toBeNull();
+  });
+
+  it('assembles tool-call deltas by index', () => {
+    const accumulated: AssembledToolCall[] = [];
+    appendToolCallDeltas(accumulated, [
+      {
+        index: 0,
+        id: 'call_a',
+        type: 'function',
+        function: { name: 'get_weather', arguments: '' },
+      },
+      { index: 1, id: 'call_b', type: 'function', function: { name: 'get_time', arguments: '' } },
+    ]);
+    appendToolCallDeltas(accumulated, [
+      { index: 0, function: { arguments: '{"city":' } },
+      { index: 1, function: { arguments: '{"tz":"UTC"}' } },
+    ]);
+    appendToolCallDeltas(accumulated, [{ index: 0, function: { arguments: '"Paris"}' } }]);
+
+    expect(compactToolCalls(accumulated)).toEqual([
+      {
+        id: 'call_a',
+        type: 'function',
+        function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+      },
+      {
+        id: 'call_b',
+        type: 'function',
+        function: { name: 'get_time', arguments: '{"tz":"UTC"}' },
+      },
+    ]);
   });
 });
 

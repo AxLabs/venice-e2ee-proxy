@@ -166,7 +166,7 @@ Interactive API documentation is served at **[http://localhost:4337/docs](http:/
 └─────────┘  plaintext SSE    └──────────────────┘   encrypted stream    └──────────────┘
 ```
 
-- **`e2ee-*` models** → the proxy creates a verified TEE session, encrypts your messages, forwards them to Venice with `venice_parameters: { enable_e2ee: true }`, and decrypts the streamed response on the fly.
+- **`e2ee-*` models** → the proxy creates a verified TEE session, encrypts prompts and tool-result bodies, forwards them to Venice with `venice_parameters: { enable_e2ee: true }`, and decrypts the streamed response on the fly. Tool names, schemas, call ids, and arguments stay plaintext (the enclave reads them as JSON). A tool call is returned as `delta.tool_calls` with `finish_reason: "tool_calls"`, so an agent can run the tool and send the result back without the history being flattened to text.
 - **All other models** → the request is proxied straight through to Venice unchanged.
 
 **Under the hood:** NestJS (TypeScript, strict mode); encryption via the [`@axlabs/venice-e2ee`](https://github.com/AxLabs/venice-e2ee) library (ECDH secp256k1 → HKDF-SHA256 → AES-256-GCM + TEE attestation); Swagger UI at `/docs`.
