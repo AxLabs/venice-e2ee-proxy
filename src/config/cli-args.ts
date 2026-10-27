@@ -47,7 +47,7 @@ Usage:
 
 Options (CLI flags override environment variables and .env):
   --venice-api-key <key>       Venice API key (env: VENICE_API_KEY)
-  -p, --port <port>            Port to listen on (default: 3000)
+  -p, --port <port>            Port to listen on (default: 4337)
   --host <host>                Interface to bind (default: 0.0.0.0)
   --session-ttl-ms <ms>        E2EE session cache TTL in ms (default: 1800000)
   --verify-attestation <bool>  Verify TEE attestation (default: true)

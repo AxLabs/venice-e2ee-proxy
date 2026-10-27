@@ -17,15 +17,15 @@ npx @axlabs/venice-e2ee-proxy --venice-api-key sk-your-venice-key
 You should see:
 
 ```
-Venice E2EE Proxy listening on http://0.0.0.0:3000
-OpenAI-compatible base URL: http://0.0.0.0:3000/v1 (also accepts http://0.0.0.0:3000/api/v1)
-Swagger UI: http://0.0.0.0:3000/docs
+Venice E2EE Proxy listening on http://0.0.0.0:4337
+OpenAI-compatible base URL: http://0.0.0.0:4337/v1 (also accepts http://0.0.0.0:4337/api/v1)
+Swagger UI: http://0.0.0.0:4337/docs
 ```
 
-That's it. Now point any OpenAI-compatible client at `http://localhost:3000/v1` and use an `e2ee-` model:
+That's it. Now point any OpenAI-compatible client at `http://localhost:4337/v1` and use an `e2ee-` model:
 
 ```bash
-curl http://localhost:3000/v1/chat/completions \
+curl http://localhost:4337/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "e2ee-qwen3-5-122b-a10b",
@@ -76,7 +76,7 @@ The only **required** setting is your Venice API key (`--venice-api-key` / `VENI
 | CLI flag | Env variable | Default | Description |
 | -------- | ------------ | ------- | ----------- |
 | `--venice-api-key <key>` | `VENICE_API_KEY` | — | Your Venice API key (**required**). |
-| `-p`, `--port <port>` | `PORT` | `3000` | Port to listen on. |
+| `-p`, `--port <port>` | `PORT` | `4337` | Port to listen on. |
 | `--host <host>` | `HOST` | `0.0.0.0` | Interface to bind. |
 | `--session-ttl-ms <ms>` | `SESSION_TTL_MS` | `1800000` (30 min) | E2EE session cache TTL in milliseconds. |
 | `--verify-attestation <bool>` | `VERIFY_ATTESTATION` | `true` | Verify TEE attestation on session creation. |
@@ -100,7 +100,7 @@ The proxy speaks the **OpenAI API**, so it works with **any client, IDE, or agen
 
 Wherever the tool asks for an OpenAI-compatible provider, set:
 
-- **Base URL:** `http://localhost:3000/v1` (the Venice-style `http://localhost:3000/api/v1` also works)
+- **Base URL:** `http://localhost:4337/v1` (the Venice-style `http://localhost:4337/api/v1` also works)
 - **API key:** any non-empty value (the proxy uses your own `VENICE_API_KEY` upstream — clients don't need a real key)
 - **Model:** an `e2ee-` model (e.g. `e2ee-qwen3-5-122b-a10b`) for encrypted inference, or any regular Venice model id
 
@@ -117,7 +117,7 @@ A few tools that work out of the box: [Jan](https://jan.ai), [Open WebUI](https:
 Returns the available models in OpenAI list format.
 
 ```bash
-curl http://localhost:3000/v1/models
+curl http://localhost:4337/v1/models
 ```
 
 ### `POST /v1/chat/completions`
@@ -127,7 +127,7 @@ OpenAI-compatible chat completions (streaming and non-streaming).
 **Non-streaming, E2EE:**
 
 ```bash
-curl http://localhost:3000/v1/chat/completions \
+curl http://localhost:4337/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "e2ee-qwen3-5-122b-a10b",
@@ -138,7 +138,7 @@ curl http://localhost:3000/v1/chat/completions \
 **Streaming, E2EE (SSE):**
 
 ```bash
-curl -N http://localhost:3000/v1/chat/completions \
+curl -N http://localhost:4337/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "e2ee-qwen3-5-122b-a10b",
@@ -149,7 +149,7 @@ curl -N http://localhost:3000/v1/chat/completions \
 
 ### Swagger UI
 
-Interactive API documentation is served at **[http://localhost:3000/docs](http://localhost:3000/docs)** (OpenAPI JSON at `/docs-json`).
+Interactive API documentation is served at **[http://localhost:4337/docs](http://localhost:4337/docs)** (OpenAPI JSON at `/docs-json`).
 
 ### Health check
 

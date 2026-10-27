@@ -37,11 +37,11 @@ export class EnvironmentVariables {
   @IsNotEmpty({ message: 'VENICE_API_KEY is required.' })
   VENICE_API_KEY!: string;
 
-  @Transform(({ value }) => (value === undefined || value === '' ? 3000 : Number(value)))
+  @Transform(({ value }) => (value === undefined || value === '' ? 4337 : Number(value)))
   @IsInt()
   @Min(1)
   @Max(65535)
-  PORT: number = 3000;
+  PORT: number = 4337;
 
   @Transform(({ value }) => (value === undefined || value === '' ? '0.0.0.0' : String(value)))
   @IsString()
