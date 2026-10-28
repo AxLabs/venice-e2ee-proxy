@@ -59,7 +59,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@axlabs/venice-e2ee": "git+https://github.com/AxLabs/venice-e2ee.git#7b4e6528f7f870402224bc887de06f0952f7f575",
+    "@axlabs/venice-e2ee": "^0.3.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
