@@ -39,7 +39,7 @@ curl http://localhost:4337/v1/chat/completions \
 
 ```bash
 # Pin a specific version
-npx @axlabs/venice-e2ee-proxy@1.0.1 --venice-api-key sk-...
+npx @axlabs/venice-e2ee-proxy@1.0.2 --venice-api-key sk-...
 
 # Install globally, then run the command directly
 npm install -g @axlabs/venice-e2ee-proxy
