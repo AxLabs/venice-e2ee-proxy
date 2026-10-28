@@ -224,6 +224,57 @@ describe('OpenAI-compatible proxy', () => {
       expect(chunks.some((chunk) => chunk.choices[0].finish_reason === 'stop')).toBe(false);
     });
 
+    it('encrypts tool schemas and recovers inline tool-call markup', async () => {
+      harness.e2ee.decryptStream.mockReturnValue(
+        yieldTexts(['Quick test. ', "<tool_call>terminal(command='date')"]),
+      );
+      harness.venice.postJson.mockResolvedValue({ ok: true, body: {} });
+
+      const res = await request(app.getHttpServer())
+        .post('/v1/chat/completions')
+        .send({
+          model: 'e2ee-glm-5-3-flash',
+          messages: [{ role: 'user', content: 'run date' }],
+          tools: [
+            {
+              type: 'function',
+              function: { name: 'terminal', parameters: { type: 'object' } },
+            },
+          ],
+          tool_choice: 'required',
+          stream: true,
+        })
+        .expect(200);
+
+      const encrypted = harness.e2ee.encrypt.mock.calls[0][0] as Array<{
+        role: string;
+        content: string;
+      }>;
+      expect(encrypted[0]).toMatchObject({
+        role: 'system',
+        content: expect.stringContaining('terminal'),
+      });
+      const upstream = harness.venice.postJson.mock.calls[0][1] as Record<string, unknown>;
+      expect(upstream.tools).toBeUndefined();
+      expect(upstream.tool_choice).toBeUndefined();
+
+      const chunks = parseSse(res.text);
+      const toolDeltas = chunks
+        .map((chunk) => chunk.choices[0].delta.tool_calls)
+        .filter((calls) => Array.isArray(calls));
+      expect(toolDeltas).toEqual([
+        [
+          expect.objectContaining({
+            type: 'function',
+            function: { name: 'terminal', arguments: '{"command":"date"}' },
+          }),
+        ],
+      ]);
+      expect(chunks[chunks.length - 1].choices[0].finish_reason).toBe('tool_calls');
+      expect(res.text).toContain('Quick test. ');
+      expect(res.text).not.toContain('<tool_call>');
+    });
+
     it('assembles tool calls by index for clients that do not stream', async () => {
       harness.e2ee.decryptStream.mockReturnValue(
         yieldEvents([
